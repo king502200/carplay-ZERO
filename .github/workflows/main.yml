@@ -1,4 +1,4 @@
-name: Build CarPlay Pro IPA
+name: Build Waze-Spoof Dash
 on: [push]
 
 jobs:
@@ -8,9 +8,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create App Files
+      - name: Create Spoof App Files
         run: |
-          # 1. ملف المحرك الأساسي
+          # 1. المحرك الأساسي
           cat <<EOF > App.swift
           import SwiftUI
           @main
@@ -21,44 +21,42 @@ jobs:
           }
           EOF
 
-          # 2. ملف تعريف CarPlay (يمنع الكراش ويطلب الظهور في السيارة)
+          # 2. ملف الربط مع CarPlay
           cat <<EOF > CarPlayScene.swift
           import UIKit
           import CarPlay
 
           class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
               func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {
-                  // هنا يتم الربط مع شاشة السيارة مستقبلاً
               }
           }
           EOF
 
-      - name: Compile Pro Build
+      - name: Compile with Waze Identity
         run: |
-          # تجميع كل الملفات في ملف تنفيذي واحد
           xcrun -sdk iphoneos swiftc App.swift ContentView.swift CarPlayScene.swift \
           -o MyCarApp \
           -target arm64-apple-ios15.0 \
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
           -emit-executable
 
-      - name: Structure IPA
+      - name: Structure Spoof IPA
         run: |
-          mkdir -p Payload/MyCarApp.app
-          mv MyCarApp Payload/MyCarApp.app/
+          mkdir -p Payload/Waze.app
+          mv MyCarApp Payload/Waze.app/Waze
           
-          # 3. ملف Info.plist الخارق (يخدع النظام ليظهره في الكار بلاي)
-          cat <<EOF > Payload/MyCarApp.app/Info.plist
+          # 3. ملف Info.plist (هنا تقع خدعة الانتحال)
+          cat <<EOF > Payload/Waze.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>CFBundleExecutable</key> <string>MyCarApp</string>
-              <key>CFBundleIdentifier</key> <string>com.mym.dashboard.pro</string>
-              <key>CFBundleName</key> <string>MyDash</string>
+              <key>CFBundleExecutable</key> <string>Waze</string>
+              <key>CFBundleIdentifier</key> <string>com.waze.iphone</string>
+              <key>CFBundleName</key> <string>Waze</string>
               <key>CFBundlePackageType</key> <string>APPL</string>
-              <key>CFBundleShortVersionString</key> <string>1.0</string>
-              <key>CFBundleVersion</key> <string>1</string>
+              <key>CFBundleShortVersionString</key> <string>4.93.1</string>
+              <key>CFBundleVersion</key> <string>4.93.1.0</string>
               <key>LSRequiresIPhoneOS</key> <true/>
               <key>MinimumOSVersion</key> <string>15.0</string>
               <key>UIApplicationSceneManifest</key>
@@ -78,10 +76,10 @@ jobs:
           </plist>
           EOF
 
-          zip -r MyCarApp.ipa Payload
+          zip -r WazeSpoof.ipa Payload
 
-      - name: Upload IPA
+      - name: Upload Spoof IPA
         uses: actions/upload-artifact@v4
         with:
-          name: CarPlay-Pro-Final
-          path: MyCarApp.ipa
+          name: Waze-Spoof-IPA
+          path: WazeSpoof.ipa
