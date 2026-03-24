@@ -1,4 +1,4 @@
-name: Build Waze-Spoof Dash
+name: Build CarPlay Navigation IPA
 on: [push]
 
 jobs:
@@ -8,7 +8,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create Spoof App Files
+      - name: Create Navigation App Files
         run: |
           # 1. المحرك الأساسي
           cat <<EOF > App.swift
@@ -21,7 +21,7 @@ jobs:
           }
           EOF
 
-          # 2. ملف الربط مع CarPlay
+          # 2. ملف تعريف الملاحة (ضروري للظهور في السيارة)
           cat <<EOF > CarPlayScene.swift
           import UIKit
           import CarPlay
@@ -32,7 +32,7 @@ jobs:
           }
           EOF
 
-      - name: Compile with Waze Identity
+      - name: Compile Navigation Build
         run: |
           xcrun -sdk iphoneos swiftc App.swift ContentView.swift CarPlayScene.swift \
           -o MyCarApp \
@@ -40,25 +40,29 @@ jobs:
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
           -emit-executable
 
-      - name: Structure Spoof IPA
+      - name: Structure Navigation IPA
         run: |
-          mkdir -p Payload/Waze.app
-          mv MyCarApp Payload/Waze.app/Waze
+          mkdir -p Payload/MyCarApp.app
+          mv MyCarApp Payload/MyCarApp.app/
           
-          # 3. ملف Info.plist (هنا تقع خدعة الانتحال)
-          cat <<EOF > Payload/Waze.app/Info.plist
+          # 3. ملف Info.plist (إضافة تصريح الملاحة)
+          cat <<EOF > Payload/MyCarApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>CFBundleExecutable</key> <string>Waze</string>
-              <key>CFBundleIdentifier</key> <string>com.waze.iphone</string>
-              <key>CFBundleName</key> <string>Waze</string>
+              <key>CFBundleExecutable</key> <string>MyCarApp</string>
+              <key>CFBundleIdentifier</key> <string>com.mym.navigation.dash</string>
+              <key>CFBundleName</key> <string>MyDash</string>
               <key>CFBundlePackageType</key> <string>APPL</string>
-              <key>CFBundleShortVersionString</key> <string>4.93.1</string>
-              <key>CFBundleVersion</key> <string>4.93.1.0</string>
+              <key>CFBundleShortVersionString</key> <string>1.0</string>
+              <key>CFBundleVersion</key> <string>1</string>
               <key>LSRequiresIPhoneOS</key> <true/>
               <key>MinimumOSVersion</key> <string>15.0</string>
+              <key>UIBackgroundModes</key>
+              <array>
+                  <string>location</string>
+              </array>
               <key>UIApplicationSceneManifest</key>
               <dict>
                   <key>UISceneConfigurations</key>
@@ -76,10 +80,10 @@ jobs:
           </plist>
           EOF
 
-          zip -r WazeSpoof.ipa Payload
+          zip -r MyCarNav.ipa Payload
 
-      - name: Upload Spoof IPA
+      - name: Upload Navigation IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Waze-Spoof-IPA
-          path: WazeSpoof.ipa
+          name: CarPlay-Navigation-Final
+          path: MyCarNav.ipa
