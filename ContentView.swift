@@ -1,5 +1,5 @@
 import SwiftUI
-import MapKit
+import WebKit
 import SafariServices
 
 struct ContentView: View {
@@ -13,66 +13,83 @@ struct ContentView: View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
             
-            HStack(spacing: 30) {
-                // الجانب الأيسر
-                VStack(spacing: 20) {
-                    // كوكب الأرض
-                    Map()
-                        .frame(width: 180, height: 180)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.blue.opacity(0.4), lineWidth: 3))
+            HStack(spacing: 40) {
+                // --- القسم الأيسر: البحث والتحكم ---
+                VStack(spacing: 25) {
+                    // أيقونة الكرة الأرضية (بدلاً من الخريطة المعقدة لتجنب الخطأ)
+                    Image(systemName: "globe.americas.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 120, height: 120)
+                        .foregroundColor(.blue)
+                        .shadow(color: .blue.opacity(0.5), radius: 20)
                     
-                    // البحث
-                    TextField("بحث...", text: $searchText, onCommit: {
+                    TextField("ابحث هنا...", text: $searchText, onCommit: {
                         openSearch()
                     })
                     .padding()
                     .background(Color.white.opacity(0.1))
-                    .cornerRadius(12)
+                    .cornerRadius(15)
                     .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
                     
-                    HStack {
+                    HStack(spacing: 20) {
                         Button("YouTube") {
                             browserURL = URL(string: "https://m.youtube.com")!
                             showBrowser = true
-                        }.buttonStyle(.borderedProminent).tint(.red)
+                        }
+                        .padding()
+                        .background(Color.red)
+                        .cornerRadius(10)
+                        .foregroundColor(.white)
                         
                         Button("Google") {
                             browserURL = URL(string: "https://www.google.com")!
                             showBrowser = true
-                        }.buttonStyle(.borderedProminent)
+                        }
+                        .padding()
+                        .background(Color.blue)
+                        .cornerRadius(10)
+                        .foregroundColor(.white)
                     }
                 }
                 .frame(maxWidth: .infinity)
 
-                // الجانب الأيمن: العداد
+                // --- القسم الأيمن: العداد الفخم ---
                 VStack {
                     ZStack {
                         Circle()
                             .trim(from: 0, to: 0.7)
-                            .stroke(accentColor.opacity(0.2), lineWidth: 20)
+                            .stroke(accentColor.opacity(0.2), lineWidth: 25)
                             .rotationEffect(.degrees(135))
                         
                         Circle()
                             .trim(from: 0, to: CGFloat(speed / 240) * 0.7)
-                            .stroke(accentColor, style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                            .stroke(accentColor, style: StrokeStyle(lineWidth: 25, lineCap: .round))
                             .rotationEffect(.degrees(135))
+                            .shadow(color: accentColor, radius: 10)
                         
                         VStack {
-                            Text("\(Int(speed))").font(.system(size: 60, weight: .black)).foregroundColor(.white)
-                            Text("KM/H").foregroundColor(accentColor)
+                            Text("\(Int(speed))")
+                                .font(.system(size: 80, weight: .black, design: .monospaced))
+                                .foregroundColor(.white)
+                            Text("KM/H")
+                                .font(.bold(.system(size: 20))())
+                                .foregroundColor(accentColor)
                         }
                     }
-                    .frame(width: 240, height: 240)
+                    .frame(width: 280, height: 280)
                     
-                    ColorPicker("", selection: $accentColor).labelsHidden()
+                    ColorPicker("لون العداد", selection: $accentColor)
+                        .labelsHidden()
+                        .padding(.top)
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding()
+            .padding(40)
         }
         .fullScreenCover(isPresented: $showBrowser) {
-            if let url = browserURL { SafariView(url: url) }
+            SafariView(url: browserURL)
         }
     }
 
@@ -85,6 +102,8 @@ struct ContentView: View {
 
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
-    func updateUIViewController(_ ui: SFSafariViewController, context: Context) {}
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        return SFSafariViewController(url: url)
+    }
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
