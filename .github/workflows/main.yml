@@ -1,0 +1,53 @@
+name: Build Zero-License IPA
+on: [push]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Project Structure
+        run: |
+          # إنشاء مشروع iOS وهمي ونظيف تماماً
+          mkdir -p CarPlayApp/CarPlayApp
+          
+          # إنشاء ملف معلومات التطبيق (Info.plist)
+          cat <<EOF > CarPlayApp/CarPlayApp/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>CarPlayApp</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.mym.carplayzero</string>
+              <key>CFBundleName</key>
+              <string>CarPlayApp</string>
+              <key>CFBundleVersion</key>
+              <string>1.0</string>
+              <key>UILaunchScreen</key>
+              <dict/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Compile Swift Code
+        run: |
+          # تحويل الكود المصدري إلى تطبيق تنفيذي (بدون Xcode Project)
+          xcrun -sdk iphoneos swiftc ContentView.swift -o CarPlayApp/CarPlayApp/CarPlayApp \
+          -target arm64-apple-ios15.0 -sdk $(xcrun --sdk iphoneos --show-sdk-path)
+
+      - name: Package to IPA
+        run: |
+          mkdir -p Payload/CarPlayApp.app
+          cp CarPlayApp/CarPlayApp/CarPlayApp Payload/CarPlayApp.app/
+          cp CarPlayApp/CarPlayApp/Info.plist Payload/CarPlayApp.app/
+          zip -r MyCarApp.ipa Payload
+
+      - name: Upload Finished IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Clean-CarPlay-IPA
+          path: MyCarApp.ipa
