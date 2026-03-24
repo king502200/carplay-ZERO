@@ -1,4 +1,4 @@
-name: Build Stable CarPlay IPA
+name: Build CarPlay Professional IPA
 on: [push]
 
 jobs:
@@ -10,9 +10,11 @@ jobs:
 
       - name: Create Full App Structure
         run: |
-          # 1. إنشاء ملف المحرك (Main App)
+          # 1. إنشاء ملف التشغيل الرئيسي (المحرك)
           cat <<EOF > App.swift
           import SwiftUI
+          import CarPlay
+
           @main
           struct MyCarApp: App {
               var body: some Scene {
@@ -21,20 +23,33 @@ jobs:
                   }
               }
           }
+
+          // هذا الجزء يضمن للسيارة أن التطبيق يدعم واجهات الكار بلاي
+          class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
+              var interfaceController: CPInterfaceController?
+
+              func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {
+                  self.interfaceController = interfaceController
+                  let item = CPListItem(text: "عداد السرعة", detailText: "عرض السرعة الحالية")
+                  let section = CPListSection(items: [item])
+                  let listTemplate = CPListTemplate(title: "MyCarApp", sections: [section])
+                  interfaceController.setRootTemplate(listTemplate, animated: true, completion: nil)
+              }
+          }
           EOF
 
-          # 2. تجميع كل الملفات معاً (App + Content)
+          # 2. تجميع الملفات (App + Content)
           xcrun -sdk iphoneos swiftc App.swift ContentView.swift \
           -o MyCarApp \
           -target arm64-apple-ios15.0 \
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
           -emit-executable
 
-          # 3. تجهيز المجلد النهائي
+          # 3. تجهيز المجلد
           mkdir -p Payload/MyCarApp.app
           mv MyCarApp Payload/MyCarApp.app/
           
-          # 4. إضافة ملف Info.plist كامل الإعدادات
+          # 4. إنشاء ملف Info.plist (المفتاح السري للظهور في الكار بلاي والـ GPS)
           cat <<EOF > Payload/MyCarApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -48,16 +63,41 @@ jobs:
               <key>CFBundleVersion</key> <string>1</string>
               <key>LSRequiresIPhoneOS</key> <true/>
               <key>MinimumOSVersion</key> <string>15.0</string>
-              <key>UILaunchScreen</key> <dict/>
+              
+              <key>NSLocationWhenInUseUsageDescription</key>
+              <string>نحتاج للموقع لحساب السرعة في العداد أثناء القيادة</string>
+              
+              <key>UIApplicationSceneManifest</key>
+              <dict>
+                  <key>UISceneConfigurations</key>
+                  <dict>
+                      <key>UIWindowSceneSessionRoleApplication</key>
+                      <array>
+                          <dict>
+                              <key>UISceneDelegateClassName</key>
+                              <string>\$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+                          </dict>
+                      </array>
+                      <key>CPTemplateApplicationSceneSessionRoleApplication</key>
+                      <array>
+                          <dict>
+                              <key>UISceneConfigurationName</key>
+                              <string>CarPlay</string>
+                              <key>UISceneDelegateClassName</key>
+                              <string>\$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+                          </dict>
+                      </array>
+                  </dict>
+              </dict>
           </dict>
           </plist>
           EOF
 
-          # 5. الضغط النهائي
+          # 5. ضغط الملف بصيغة IPA
           zip -r MyCarApp.ipa Payload
 
-      - name: Upload Finished IPA
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Fixed-CarPlay-IPA
+          name: Full-CarPlay-IPA
           path: MyCarApp.ipa
