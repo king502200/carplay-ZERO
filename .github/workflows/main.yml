@@ -1,4 +1,4 @@
-name: Build CarPlay IPA
+name: Build Stable CarPlay IPA
 on: [push]
 
 jobs:
@@ -8,30 +8,56 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Find and Compile
+      - name: Create Full App Structure
         run: |
-          # البحث عن ملف الكود في كل مكان
-          CODE_FILE=$(find . -name "ContentView.swift" | head -n 1)
-          echo "Found code at: $CODE_FILE"
-          
-          # إنشاء هيكل التطبيق
-          mkdir -p Payload/MyCarApp.app
-          
-          # تجميع الكود المصدري
-          xcrun -sdk iphoneos swiftc "$CODE_FILE" \
-          -o Payload/MyCarApp.app/MyCarApp \
+          # 1. إنشاء ملف المحرك (Main App)
+          cat <<EOF > App.swift
+          import SwiftUI
+          @main
+          struct MyCarApp: App {
+              var body: some Scene {
+                  WindowGroup {
+                      ContentView()
+                  }
+              }
+          }
+          EOF
+
+          # 2. تجميع كل الملفات معاً (App + Content)
+          xcrun -sdk iphoneos swiftc App.swift ContentView.swift \
+          -o MyCarApp \
           -target arm64-apple-ios15.0 \
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
           -emit-executable
 
-          # إضافة ملف التعريف الأساسي
-          echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>MyCarApp</string><key>CFBundleIdentifier</key><string>com.mym.carplay</string><key>CFBundleName</key><string>MyCarApp</string><key>CFBundleVersion</key><string>1.0</string><key>LSRequiresIPhoneOS</key><true/><key>MinimumOSVersion</key><string>15.0</string></dict></plist>' > Payload/MyCarApp.app/Info.plist
+          # 3. تجهيز المجلد النهائي
+          mkdir -p Payload/MyCarApp.app
+          mv MyCarApp Payload/MyCarApp.app/
+          
+          # 4. إضافة ملف Info.plist كامل الإعدادات
+          cat <<EOF > Payload/MyCarApp.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key> <string>MyCarApp</string>
+              <key>CFBundleIdentifier</key> <string>com.mym.carplayzero</string>
+              <key>CFBundleName</key> <string>MyCarApp</string>
+              <key>CFBundlePackageType</key> <string>APPL</string>
+              <key>CFBundleShortVersionString</key> <string>1.0</string>
+              <key>CFBundleVersion</key> <string>1</string>
+              <key>LSRequiresIPhoneOS</key> <true/>
+              <key>MinimumOSVersion</key> <string>15.0</string>
+              <key>UILaunchScreen</key> <dict/>
+          </dict>
+          </plist>
+          EOF
 
-          # ضغط الملف بصيغة IPA
+          # 5. الضغط النهائي
           zip -r MyCarApp.ipa Payload
 
-      - name: Upload Result
+      - name: Upload Finished IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Final-CarPlay-IPA
+          name: Fixed-CarPlay-IPA
           path: MyCarApp.ipa
