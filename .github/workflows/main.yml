@@ -1,4 +1,4 @@
-name: Build MYM DRIVE Pro
+name: Build MYM DRIVE Fix
 on: [push]
 
 jobs:
@@ -10,14 +10,15 @@ jobs:
 
       - name: Generate Icon Sizes
         run: |
-          mkdir -p MyCarApp/Assets.xcassets/AppIcon.appiconset
+          # إنشاء مجلد الأصول باسم مختلف لتجنب التعارض
+          mkdir -p AssetsSource/AppIcon.appiconset
           if [ -f "AppIcon.png" ]; then
-            sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png
-            sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png
-            sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@2x.png
-            sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@3x.png
-            sips -z 1024 1024 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-AppStore.png
-            cat <<EOF > MyCarApp/Assets.xcassets/AppIcon.appiconset/Contents.json
+            sips -z 120 120 AppIcon.png --out AssetsSource/AppIcon.appiconset/Icon-60@2x.png
+            sips -z 180 180 AppIcon.png --out AssetsSource/AppIcon.appiconset/Icon-60@3x.png
+            sips -z 120 120 AppIcon.png --out AssetsSource/AppIcon.appiconset/CarPlay-60@2x.png
+            sips -z 180 180 AppIcon.png --out AssetsSource/AppIcon.appiconset/CarPlay-60@3x.png
+            sips -z 1024 1024 AppIcon.png --out AssetsSource/AppIcon.appiconset/Icon-AppStore.png
+            cat <<EOF > AssetsSource/AppIcon.appiconset/Contents.json
             {
               "images" : [
                 { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@2x.png", "scale" : "2x" },
@@ -29,8 +30,6 @@ jobs:
               "info" : { "version" : 1, "author" : "xcode" }
             }
           EOF
-          else
-            echo "⚠️ AppIcon.png not found, building without custom icon."
           fi
 
       - name: Compile App
@@ -49,22 +48,29 @@ jobs:
               func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {}
           }
           EOF
+          # أمر التجميع مع اسم ملف تنفيذي واضح
           xcrun -sdk iphoneos swiftc App.swift ContentView.swift CarPlayScene.swift \
-          -o MyCarApp -target arm64-apple-ios15.0 \
+          -o MYMExe -target arm64-apple-ios15.0 \
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) -emit-executable
 
-      - name: Package IPA (MYM DRIVE)
+      - name: Package IPA
         run: |
-          mkdir -p Payload/MyCarApp.app
-          mv MyCarApp Payload/MyCarApp.app/
-          [ -d "MyCarApp/Assets.xcassets" ] && cp -r MyCarApp/Assets.xcassets Payload/MyCarApp.app/
+          mkdir -p Payload/MYMDRIVE.app
+          mv MYMExe Payload/MYMDRIVE.app/MYMDRIVE
           
-          cat <<EOF > Payload/MyCarApp.app/Info.plist
+          # نقل الأيقونات
+          if [ -d "AssetsSource" ]; then
+            mkdir -p Payload/MYMDRIVE.app/Assets.xcassets
+            cp -r AssetsSource/AppIcon.appiconset Payload/MYMDRIVE.app/Assets.xcassets/
+          fi
+          
+          # إنشاء ملف Info.plist
+          cat <<EOF > Payload/MYMDRIVE.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>CFBundleExecutable</key> <string>MyCarApp</string>
+              <key>CFBundleExecutable</key> <string>MYMDRIVE</string>
               <key>CFBundleIdentifier</key> <string>com.mym.drive.pro</string>
               <key>CFBundleName</key> <string>MYM DRIVE</string>
               <key>CFBundleIconName</key> <string>AppIcon</string>
@@ -94,5 +100,5 @@ jobs:
       - name: Upload Build
         uses: actions/upload-artifact@v4
         with:
-          name: MYM-DRIVE-Final
+          name: MYM-DRIVE-Fixed
           path: MYM_DRIVE.ipa
