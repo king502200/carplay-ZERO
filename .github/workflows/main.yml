@@ -1,4 +1,4 @@
-name: Build CarPlay Navigation IPA
+name: Build CarPlay App with Perfect Icon Sizes
 on: [push]
 
 jobs:
@@ -8,61 +8,91 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create Navigation App Files
+      - name: Generate All Icon Sizes (Automated)
         run: |
-          # 1. المحرك الأساسي
+          # 1. إنشاء مجلد الأيقونات المعياري للأصول (Assets)
+          mkdir -p MyCarApp/Assets.xcassets/AppIcon.appiconset
+
+          # 2. التحقق من وجود الصورة الأصلية
+          if [ ! -f "AppIcon.png" ]; then
+            echo "❌ خطأ: لم يتم العثور على ملف AppIcon.png في المجلد الرئيسي!"
+            exit 1
+          fi
+
+          # 3. توليد المقاسات المطلوبة بدقة باستخدام 'sips' (أداة Mac الرسمية)
+          # مقاسات الآيفون (iPhone Icons)
+          sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png
+          sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png
+
+          # مقاسات الكار بلاي (CarPlay Icons - أهم خطوة)
+          sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@2x.png
+          sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@3x.png
+
+          # مقاس المتجر (App Store Icon)
+          sips -z 1024 1024 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-AppStore.png
+
+          # 4. إنشاء ملف التعريف (Contents.json) ليربط المقاسات بالنظام
+          cat <<EOF > MyCarApp/Assets.xcassets/AppIcon.appiconset/Contents.json
+          {
+            "images" : [
+              { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@2x.png", "scale" : "2x" },
+              { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@3x.png", "scale" : "3x" },
+              { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@2x.png", "scale" : "2x" },
+              { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@3x.png", "scale" : "3x" },
+              { "size" : "1024x1024", "idiom" : "ios-marketing", "filename" : "Icon-AppStore.png", "scale" : "1x" }
+            ],
+            "info" : { "version" : 1, "author" : "xcode" }
+          }
+          EOF
+
+      - name: Create App Structure & Compile
+        run: |
+          # إنشاء ملفات التطبيق والمحرك (نفس الكود السابق)
           cat <<EOF > App.swift
           import SwiftUI
           @main
           struct MyCarApp: App {
-              var body: some Scene {
-                  WindowGroup { ContentView() }
-              }
+              var body: some Scene { WindowGroup { ContentView() } }
           }
           EOF
 
-          # 2. ملف تعريف الملاحة (ضروري للظهور في السيارة)
           cat <<EOF > CarPlayScene.swift
           import UIKit
           import CarPlay
-
           class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
-              func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {
-              }
+              func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {}
           }
           EOF
 
-      - name: Compile Navigation Build
-        run: |
+          # تجميع التطبيق
           xcrun -sdk iphoneos swiftc App.swift ContentView.swift CarPlayScene.swift \
           -o MyCarApp \
           -target arm64-apple-ios15.0 \
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
           -emit-executable
 
-      - name: Structure Navigation IPA
+      - name: Finalize IPA with Perfect Icons
         run: |
           mkdir -p Payload/MyCarApp.app
           mv MyCarApp Payload/MyCarApp.app/
           
-          # 3. ملف Info.plist (إضافة تصريح الملاحة)
+          # نسخ مجلد الأصول (Assets) المولد تلقائياً داخل التطبيق
+          cp -r MyCarApp/Assets.xcassets Payload/MyCarApp.app/Assets.xcassets
+
+          # تحديث ملف Info.plist ليشمل مجلد الأيقونات
           cat <<EOF > Payload/MyCarApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>CFBundleExecutable</key> <string>MyCarApp</string>
-              <key>CFBundleIdentifier</key> <string>com.mym.navigation.dash</string>
+              <key>CFBundleIdentifier</key> <string>com.mym.dashboard.pro</string>
               <key>CFBundleName</key> <string>MyDash</string>
-              <key>CFBundlePackageType</key> <string>APPL</string>
+              <key>CFBundleIconName</key> <string>AppIcon</string> <key>CFBundlePackageType</key> <string>APPL</string>
               <key>CFBundleShortVersionString</key> <string>1.0</string>
               <key>CFBundleVersion</key> <string>1</string>
               <key>LSRequiresIPhoneOS</key> <true/>
               <key>MinimumOSVersion</key> <string>15.0</string>
-              <key>UIBackgroundModes</key>
-              <array>
-                  <string>location</string>
-              </array>
               <key>UIApplicationSceneManifest</key>
               <dict>
                   <key>UISceneConfigurations</key>
@@ -80,10 +110,10 @@ jobs:
           </plist>
           EOF
 
-          zip -r MyCarNav.ipa Payload
+          zip -r MyCarApp.ipa Payload
 
-      - name: Upload Navigation IPA
+      - name: Upload Final Build
         uses: actions/upload-artifact@v4
         with:
-          name: CarPlay-Navigation-Final
-          path: MyCarNav.ipa
+          name: CarPlay-Perfect-Icons
+          path: MyCarApp.ipa
