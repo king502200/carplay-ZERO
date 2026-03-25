@@ -1,4 +1,4 @@
-name: Build CarPlay App with Perfect Icon Sizes
+name: Build MYM DRIVE Pro
 on: [push]
 
 jobs:
@@ -8,46 +8,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Generate All Icon Sizes (Automated)
+      - name: Generate Icon Sizes
         run: |
-          # 1. إنشاء مجلد الأيقونات المعياري للأصول (Assets)
           mkdir -p MyCarApp/Assets.xcassets/AppIcon.appiconset
-
-          # 2. التحقق من وجود الصورة الأصلية
-          if [ ! -f "AppIcon.png" ]; then
-            echo "❌ خطأ: لم يتم العثور على ملف AppIcon.png في المجلد الرئيسي!"
-            exit 1
+          if [ -f "AppIcon.png" ]; then
+            sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png
+            sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png
+            sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@2x.png
+            sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@3x.png
+            sips -z 1024 1024 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-AppStore.png
+            cat <<EOF > MyCarApp/Assets.xcassets/AppIcon.appiconset/Contents.json
+            {
+              "images" : [
+                { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@2x.png", "scale" : "2x" },
+                { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@3x.png", "scale" : "3x" },
+                { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@2x.png", "scale" : "2x" },
+                { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@3x.png", "scale" : "3x" },
+                { "size" : "1024x1024", "idiom" : "ios-marketing", "filename" : "Icon-AppStore.png", "scale" : "1x" }
+              ],
+              "info" : { "version" : 1, "author" : "xcode" }
+            }
+          EOF
+          else
+            echo "⚠️ AppIcon.png not found, building without custom icon."
           fi
 
-          # 3. توليد المقاسات المطلوبة بدقة باستخدام 'sips' (أداة Mac الرسمية)
-          # مقاسات الآيفون (iPhone Icons)
-          sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png
-          sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png
-
-          # مقاسات الكار بلاي (CarPlay Icons - أهم خطوة)
-          sips -z 120 120 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@2x.png
-          sips -z 180 180 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/CarPlay-60@3x.png
-
-          # مقاس المتجر (App Store Icon)
-          sips -z 1024 1024 AppIcon.png --out MyCarApp/Assets.xcassets/AppIcon.appiconset/Icon-AppStore.png
-
-          # 4. إنشاء ملف التعريف (Contents.json) ليربط المقاسات بالنظام
-          cat <<EOF > MyCarApp/Assets.xcassets/AppIcon.appiconset/Contents.json
-          {
-            "images" : [
-              { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@2x.png", "scale" : "2x" },
-              { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@3x.png", "scale" : "3x" },
-              { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@2x.png", "scale" : "2x" },
-              { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@3x.png", "scale" : "3x" },
-              { "size" : "1024x1024", "idiom" : "ios-marketing", "filename" : "Icon-AppStore.png", "scale" : "1x" }
-            ],
-            "info" : { "version" : 1, "author" : "xcode" }
-          }
-          EOF
-
-      - name: Create App Structure & Compile
+      - name: Compile App
         run: |
-          # إنشاء ملفات التطبيق والمحرك (نفس الكود السابق)
           cat <<EOF > App.swift
           import SwiftUI
           @main
@@ -55,7 +42,6 @@ jobs:
               var body: some Scene { WindowGroup { ContentView() } }
           }
           EOF
-
           cat <<EOF > CarPlayScene.swift
           import UIKit
           import CarPlay
@@ -63,32 +49,26 @@ jobs:
               func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {}
           }
           EOF
-
-          # تجميع التطبيق
           xcrun -sdk iphoneos swiftc App.swift ContentView.swift CarPlayScene.swift \
-          -o MyCarApp \
-          -target arm64-apple-ios15.0 \
-          -sdk $(xcrun --sdk iphoneos --show-sdk-path) \
-          -emit-executable
+          -o MyCarApp -target arm64-apple-ios15.0 \
+          -sdk $(xcrun --sdk iphoneos --show-sdk-path) -emit-executable
 
-      - name: Finalize IPA with Perfect Icons
+      - name: Package IPA (MYM DRIVE)
         run: |
           mkdir -p Payload/MyCarApp.app
           mv MyCarApp Payload/MyCarApp.app/
+          [ -d "MyCarApp/Assets.xcassets" ] && cp -r MyCarApp/Assets.xcassets Payload/MyCarApp.app/
           
-          # نسخ مجلد الأصول (Assets) المولد تلقائياً داخل التطبيق
-          cp -r MyCarApp/Assets.xcassets Payload/MyCarApp.app/Assets.xcassets
-
-          # تحديث ملف Info.plist ليشمل مجلد الأيقونات
           cat <<EOF > Payload/MyCarApp.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>CFBundleExecutable</key> <string>MyCarApp</string>
-              <key>CFBundleIdentifier</key> <string>com.mym.dashboard.pro</string>
-              <key>CFBundleName</key> <string>MyDash</string>
-              <key>CFBundleIconName</key> <string>AppIcon</string> <key>CFBundlePackageType</key> <string>APPL</string>
+              <key>CFBundleIdentifier</key> <string>com.mym.drive.pro</string>
+              <key>CFBundleName</key> <string>MYM DRIVE</string>
+              <key>CFBundleIconName</key> <string>AppIcon</string>
+              <key>CFBundlePackageType</key> <string>APPL</string>
               <key>CFBundleShortVersionString</key> <string>1.0</string>
               <key>CFBundleVersion</key> <string>1</string>
               <key>LSRequiresIPhoneOS</key> <true/>
@@ -109,11 +89,10 @@ jobs:
           </dict>
           </plist>
           EOF
+          zip -r MYM_DRIVE.ipa Payload
 
-          zip -r MyCarApp.ipa Payload
-
-      - name: Upload Final Build
+      - name: Upload Build
         uses: actions/upload-artifact@v4
         with:
-          name: CarPlay-Perfect-Icons
-          path: MyCarApp.ipa
+          name: MYM-DRIVE-Final
+          path: MYM_DRIVE.ipa
