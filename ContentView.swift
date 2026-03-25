@@ -1,73 +1,112 @@
 import SwiftUI
+import CoreLocation // ضروري للـ GPS الحقيقي
 import SafariServices
 
+// مدير الموقع (GPS Manager)
+class SpeedManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published var currentSpeedKH: Double = 0.0
+    private let locationManager = CLLocationManager()
+    
+    override init() {
+        super.init()
+        locationManager.delegate = self
+        // طلب تصريح الموقع (يجب تفعيله في Info.plist)
+        locationManager.requestWhenInUseAuthorization()
+        // ضبط الدقة العالية (Best for Navigation) لسرعة دقيقة
+        locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        locationManager.startUpdatingLocation()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.last {
+            // سرعة الـ GPS تأتي بالمتر/ثانية، نحولها كم/ساعة
+            let speedMS = location.speed
+            if speedMS > 0 {
+                self.currentSpeedKH = speedMS * 3.6
+            } else {
+                self.currentSpeedKH = 0.0 // السيارة واقفة
+            }
+        }
+    }
+}
+
 struct ContentView: View {
-    @State private var speed: Double = 0.0
+    // ربط العداد بمدير السرعة الفعلي
+    @StateObject private var speedManager = SpeedManager()
+    @State private var accentColor: Color = .purple // اللون الأرجواني الافتراضي
     @State private var searchText: String = ""
     @State private var showBrowser = false
     @State private var browserURL = URL(string: "https://www.google.com")!
     
-    // --- ميزة التحكم باللون ---
-    @State private var accentColor: Color = .cyan // اللون الافتراضي (أزرق ثلجي)
-    
-    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
-
     var body: some View {
-        ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
+        // استخدم GeometryReader لوزن المقاسات بدقة
+        GeometryReader { geo in
+            let screenWidth = geo.size.width
+            let screenHeight = geo.size.height
             
-            VStack(spacing: 20) {
-                // --- القسم العلوي: عداد السرعة الملون ---
-                ZStack {
-                    GaugeBackground(color: accentColor)
-                    
-                    GaugeNeedle(speed: speed, color: accentColor)
-                    
-                    DigitalDashboard(speed: speed, color: accentColor)
-                }
-                .frame(width: 300, height: 300)
+            // حساب حجم العداد بناءً على أقصر بُعد للشاشة
+            let gaugeSize = min(screenWidth, screenHeight) * 0.85
+            
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
                 
-                // --- أدوات التحكم (البحث + يوتيوب + مغير الألوان) ---
-                HStack(spacing: 15) {
-                    // مغير الألوان (تنسيق دائري صغير)
-                    VStack(spacing: 5) {
-                        ColorPicker("", selection: $accentColor)
-                            .labelsHidden()
-                            .scaleEffect(1.2)
-                        Text("اللون").font(.caption2).foregroundColor(.gray)
+                VStack(spacing: 0) {
+                    // العداد - محتشم وموزون في المنتصف
+                    ZStack {
+                        GaugeBackground(color: accentColor, size: gaugeSize)
+                        GaugeNeedle(speed: speedManager.currentSpeedKH, color: accentColor, size: gaugeSize)
+                        DigitalDashboard(speed: speedManager.currentSpeedKH, color: accentColor, size: gaugeSize)
                     }
-                    .padding(8)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(12)
-
-                    // شريط البحث
-                    HStack {
-                        Image(systemName: "magnifyingglass").foregroundColor(.gray)
-                        TextField("بحث...", text: $searchText, onCommit: openSearch)
-                            .foregroundColor(.white)
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                    .frame(width: gaugeSize, height: gaugeSize)
+                    .padding(.top, (screenHeight - gaugeSize) * 0.4) // توسيط عمودي دقيق
                     
-                    // زر يوتيوب
-                    Button(action: { openLink("https://m.youtube.com") }) {
-                        Image(systemName: "play.rectangle.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.red)
-                            .shadow(color: .red.opacity(0.4), radius: 10)
+                    Spacer() // دفع الأدوات للأسفل
+                    
+                    // شريط الأدوات السفلي
+                    HStack(spacing: 20) {
+                        // مغير الألوان
+                        VStack(spacing: 5) {
+                            ColorPicker("", selection: $accentColor)
+                                .labelsHidden()
+                                .scaleEffect(1.3)
+                            Text("اللون").font(.caption2).foregroundColor(.gray)
+                        }
+                        .padding(10)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(15)
+                        
+                        // شريط البحث
+                        HStack {
+                            Image(systemName: "magnifyingglass").foregroundColor(.gray)
+                            TextField("بحث Google...", text: $searchText, onCommit: openSearch)
+                                .foregroundColor(.white)
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .padding()
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                        
+                        // زر YouTube
+                        Button(action: { openLink("https://m.youtube.com") }) {
+                            Image(systemName: "play.tv.fill")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 60, height: 60)
+                                .foregroundColor(.red)
+                                .shadow(color: .red.opacity(0.7), radius: 15)
+                        }
                     }
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 25)
+                .frame(width: screenWidth, height: screenHeight) // ملء الشاشة
             }
         }
         .fullScreenCover(isPresented: $showBrowser) { SafariView(url: browserURL) }
-        .onReceive(timer) { _ in
-            if speed < 141 { speed += 1.0 }
-        }
     }
-
+    
+    // وظائف البحث والروابط
     func openSearch() {
         let query = searchText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         openLink("https://www.google.com/search?q=\(query)")
@@ -79,43 +118,48 @@ struct ContentView: View {
     }
 }
 
-// --- مكونات التصميم المعدلة لتدعم تغيير الألوان ---
+// --- مكونات التصميم الموزونة (تأخذ الحجم كبارامتر) ---
 
 struct GaugeBackground: View {
     var color: Color
+    var size: CGFloat
+    
     var body: some View {
         ZStack {
-            // الحلقة المتوهجة
+            // الحلقة الخارجية
             Circle()
                 .trim(from: 0, to: 0.75)
-                .stroke(color.opacity(0.8), style: StrokeStyle(lineWidth: 15, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: size * 0.05, lineCap: .round))
                 .rotationEffect(.degrees(135))
-                .shadow(color: color.opacity(0.6), radius: 15)
+                .shadow(color: color.opacity(0.6), radius: size * 0.05)
             
             // الخطوط (Ticks)
-            ForEach(0..<23) { tick in
+            let tickCount = 23
+            ForEach(0..<tickCount) { tick in
                 Rectangle()
-                    .fill(tick % 2 == 0 ? color : Color.white.opacity(0.3))
-                    .frame(width: tick % 2 == 0 ? 3 : 1, height: 10)
-                    .offset(y: -135)
+                    .fill(tick % 2 == 0 ? color : Color.white.opacity(0.4))
+                    .frame(width: tick % 2 == 0 ? size * 0.01 : size * 0.003, height: size * 0.035)
+                    .offset(y: -size / 2 + size * 0.05)
                     .rotationEffect(.degrees(Double(tick) * 12 + 135))
             }
             
             // الأرقام
-            ForEach([0, 40, 80, 120, 160, 200, 240], id: \.self) { num in
+            let numbers = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240]
+            ForEach(numbers, id: \.self) { num in
                 Text("\(num)")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: size * 0.045, weight: .bold))
                     .foregroundColor(color)
-                    .position(numTextPosition(for: num, radius: 105))
+                    .position(numTextPosition(for: num, radius: size / 2 - size * 0.12, gaugeSize: size))
             }
         }
     }
     
-    func numTextPosition(for num: Int, radius: CGFloat) -> CGPoint {
+    // حساب موقع الأرقام بناءً على حجم العداد
+    func numTextPosition(for num: Int, radius: CGFloat, gaugeSize: CGFloat) -> CGPoint {
         let angle = CGFloat(num) / 240.0 * 270.0 + 135.0
         let radian = angle * CGFloat.pi / 180.0
-        let x = radius * cos(radian) + 150 
-        let y = radius * sin(radian) + 150
+        let x = radius * cos(radian) + gaugeSize / 2
+        let y = radius * sin(radian) + gaugeSize / 2
         return CGPoint(x: x, y: y)
     }
 }
@@ -123,40 +167,48 @@ struct GaugeBackground: View {
 struct GaugeNeedle: View {
     var speed: Double
     var color: Color
+    var size: CGFloat
+    
     var body: some View {
         ZStack {
+            // الإبرة
             Rectangle()
                 .fill(LinearGradient(colors: [.white, color], startPoint: .top, endPoint: .bottom))
-                .frame(width: 3, height: 120)
-                .offset(y: -50)
+                .frame(width: size * 0.01, height: size * 0.45)
+                .offset(y: -size * 0.18)
             
+            // المركز
             Circle()
-                .fill(color)
-                .frame(width: 15, height: 15)
-                .shadow(color: color, radius: 5)
+                .fill(LinearGradient(gradient: Gradient(colors: [Color.gray, Color.black]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: size * 0.06, height: size * 0.06)
+                .overlay(Circle().stroke(Color.gray.opacity(0.5), lineWidth: 2))
         }
-        .rotationEffect(.degrees(Double(speed) / 240.0 * 270.0 + 135.0))
+        // زاوية الدوران بناءً على السرعة الحقيقية
+        .rotationEffect(.degrees(min(Double(speed), 240.0) / 240.0 * 270.0 + 135.0))
     }
 }
 
 struct DigitalDashboard: View {
     var speed: Double
     var color: Color
+    var size: CGFloat
+    
     var body: some View {
-        VStack(spacing: -5) {
+        VStack(spacing: -size * 0.01) {
             Text("\(Int(speed))")
-                .font(.system(size: 70, weight: .black, design: .monospaced))
+                .font(.system(size: size * 0.28, weight: .black, design: .monospaced))
                 .foregroundColor(.white)
-                .shadow(color: color.opacity(0.5), radius: 10)
+                .shadow(color: color.opacity(0.6), radius: size * 0.05)
             Text("KM/H")
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: size * 0.06, weight: .bold))
                 .foregroundColor(color)
-                .tracking(3)
+                .tracking(size * 0.01)
         }
-        .padding(.top, 130)
+        .padding(.top, size * 0.45) // توسيط عمودي دقيق للرقم
     }
 }
 
+// مكون المتصفح الداخلي
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
