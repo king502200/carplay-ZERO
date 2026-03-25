@@ -1,4 +1,4 @@
-name: Build MYM DRIVE Fix
+name: Build Final CarPlay App
 on: [push]
 
 jobs:
@@ -8,32 +8,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Generate Icon Sizes
+      - name: Setup Files
         run: |
-          # إنشاء مجلد الأصول باسم مختلف لتجنب التعارض
-          mkdir -p AssetsSource/AppIcon.appiconset
-          if [ -f "AppIcon.png" ]; then
-            sips -z 120 120 AppIcon.png --out AssetsSource/AppIcon.appiconset/Icon-60@2x.png
-            sips -z 180 180 AppIcon.png --out AssetsSource/AppIcon.appiconset/Icon-60@3x.png
-            sips -z 120 120 AppIcon.png --out AssetsSource/AppIcon.appiconset/CarPlay-60@2x.png
-            sips -z 180 180 AppIcon.png --out AssetsSource/AppIcon.appiconset/CarPlay-60@3x.png
-            sips -z 1024 1024 AppIcon.png --out AssetsSource/AppIcon.appiconset/Icon-AppStore.png
-            cat <<EOF > AssetsSource/AppIcon.appiconset/Contents.json
-            {
-              "images" : [
-                { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@2x.png", "scale" : "2x" },
-                { "size" : "60x60", "idiom" : "iphone", "filename" : "Icon-60@3x.png", "scale" : "3x" },
-                { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@2x.png", "scale" : "2x" },
-                { "size" : "60x60", "idiom" : "car", "filename" : "CarPlay-60@3x.png", "scale" : "3x" },
-                { "size" : "1024x1024", "idiom" : "ios-marketing", "filename" : "Icon-AppStore.png", "scale" : "1x" }
-              ],
-              "info" : { "version" : 1, "author" : "xcode" }
-            }
-          EOF
-          fi
-
-      - name: Compile App
-        run: |
+          # إنشاء ملفات التطبيق
           cat <<EOF > App.swift
           import SwiftUI
           @main
@@ -41,64 +18,52 @@ jobs:
               var body: some Scene { WindowGroup { ContentView() } }
           }
           EOF
+
           cat <<EOF > CarPlayScene.swift
           import UIKit
           import CarPlay
           class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
-              func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {}
+              func templateApplicationScene(_ s: CPTemplateApplicationScene, didConnect c: CPInterfaceController) {}
           }
           EOF
-          # أمر التجميع مع اسم ملف تنفيذي واضح
+
+      - name: Build Binary
+        run: |
           xcrun -sdk iphoneos swiftc App.swift ContentView.swift CarPlayScene.swift \
-          -o MYMExe -target arm64-apple-ios15.0 \
+          -o MyCarApp -target arm64-apple-ios15.0 \
           -sdk $(xcrun --sdk iphoneos --show-sdk-path) -emit-executable
 
       - name: Package IPA
         run: |
-          mkdir -p Payload/MYMDRIVE.app
-          mv MYMExe Payload/MYMDRIVE.app/MYMDRIVE
-          
-          # نقل الأيقونات
-          if [ -d "AssetsSource" ]; then
-            mkdir -p Payload/MYMDRIVE.app/Assets.xcassets
-            cp -r AssetsSource/AppIcon.appiconset Payload/MYMDRIVE.app/Assets.xcassets/
-          fi
-          
-          # إنشاء ملف Info.plist
-          cat <<EOF > Payload/MYMDRIVE.app/Info.plist
+          mkdir -p Payload/MyDash.app
+          mv MyCarApp Payload/MyDash.app/MyDash
+          if [ -f "AppIcon.png" ]; then cp AppIcon.png Payload/MyDash.app/AppIcon.png; fi
+
+          cat <<EOF > Payload/MyDash.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>CFBundleExecutable</key> <string>MYMDRIVE</string>
-              <key>CFBundleIdentifier</key> <string>com.mym.drive.pro</string>
-              <key>CFBundleName</key> <string>MYM DRIVE</string>
-              <key>CFBundleIconName</key> <string>AppIcon</string>
-              <key>CFBundlePackageType</key> <string>APPL</string>
-              <key>CFBundleShortVersionString</key> <string>1.0</string>
-              <key>CFBundleVersion</key> <string>1</string>
-              <key>LSRequiresIPhoneOS</key> <true/>
-              <key>MinimumOSVersion</key> <string>15.0</string>
+              <key>CFBundleExecutable</key> <string>MyDash</string>
+              <key>CFBundleIdentifier</key> <string>com.mym.dashboard.final</string>
+              <key>CFBundleName</key> <string>MyDash</string>
+              <key>CFBundleIconFile</key> <string>AppIcon.png</string>
+              <key>NSLocationWhenInUseUsageDescription</key> <string>لحساب السرعة</string>
+              <key>UIBackgroundModes</key> <array><string>location</string></array>
               <key>UIApplicationSceneManifest</key>
               <dict>
                   <key>UISceneConfigurations</key>
                   <dict>
                       <key>CPTemplateApplicationSceneSessionRoleApplication</key>
-                      <array>
-                          <dict>
-                              <key>UISceneDelegateClassName</key>
-                              <string>MyCarApp.CarPlaySceneDelegate</string>
-                          </dict>
-                      </array>
+                      <array><dict><key>UISceneDelegateClassName</key><string>MyDash.CarPlaySceneDelegate</string></dict></array>
                   </dict>
               </dict>
           </dict>
           </plist>
           EOF
-          zip -r MYM_DRIVE.ipa Payload
+          zip -r MyDash.ipa Payload
 
-      - name: Upload Build
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: MYM-DRIVE-Fixed
-          path: MYM_DRIVE.ipa
+          name: Final-Build-With-Icon
+          path: MyDash.ipa
