@@ -1,109 +1,164 @@
 import SwiftUI
-import WebKit
 import SafariServices
 
 struct ContentView: View {
     @State private var speed: Double = 0.0
-    @State private var accentColor: Color = .green
     @State private var searchText: String = ""
     @State private var showBrowser = false
     @State private var browserURL = URL(string: "https://www.google.com")!
+    
+    // --- ميزة التحكم باللون ---
+    @State private var accentColor: Color = .cyan // اللون الافتراضي (أزرق ثلجي)
+    
+    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
             
-            HStack(spacing: 40) {
-                // --- القسم الأيسر: البحث والتحكم ---
-                VStack(spacing: 25) {
-                    // أيقونة الكرة الأرضية (بدلاً من الخريطة المعقدة لتجنب الخطأ)
-                    Image(systemName: "globe.americas.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 120, height: 120)
-                        .foregroundColor(.blue)
-                        .shadow(color: .blue.opacity(0.5), radius: 20)
+            VStack(spacing: 20) {
+                // --- القسم العلوي: عداد السرعة الملون ---
+                ZStack {
+                    GaugeBackground(color: accentColor)
                     
-                    TextField("ابحث هنا...", text: $searchText, onCommit: {
-                        openSearch()
-                    })
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(15)
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
+                    GaugeNeedle(speed: speed, color: accentColor)
                     
-                    HStack(spacing: 20) {
-                        Button("YouTube") {
-                            browserURL = URL(string: "https://m.youtube.com")!
-                            showBrowser = true
-                        }
-                        .padding()
-                        .background(Color.red)
-                        .cornerRadius(10)
-                        .foregroundColor(.white)
-                        
-                        Button("Google") {
-                            browserURL = URL(string: "https://www.google.com")!
-                            showBrowser = true
-                        }
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(10)
-                        .foregroundColor(.white)
-                    }
+                    DigitalDashboard(speed: speed, color: accentColor)
                 }
-                .frame(maxWidth: .infinity)
+                .frame(width: 300, height: 300)
+                
+                // --- أدوات التحكم (البحث + يوتيوب + مغير الألوان) ---
+                HStack(spacing: 15) {
+                    // مغير الألوان (تنسيق دائري صغير)
+                    VStack(spacing: 5) {
+                        ColorPicker("", selection: $accentColor)
+                            .labelsHidden()
+                            .scaleEffect(1.2)
+                        Text("اللون").font(.caption2).foregroundColor(.gray)
+                    }
+                    .padding(8)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(12)
 
-                // --- القسم الأيمن: العداد الفخم ---
-                VStack {
-                    ZStack {
-                        Circle()
-                            .trim(from: 0, to: 0.7)
-                            .stroke(accentColor.opacity(0.2), lineWidth: 25)
-                            .rotationEffect(.degrees(135))
-                        
-                        Circle()
-                            .trim(from: 0, to: CGFloat(speed / 240) * 0.7)
-                            .stroke(accentColor, style: StrokeStyle(lineWidth: 25, lineCap: .round))
-                            .rotationEffect(.degrees(135))
-                            .shadow(color: accentColor, radius: 10)
-                        
-                        VStack {
-                            Text("\(Int(speed))")
-                                .font(.system(size: 80, weight: .black, design: .monospaced))
-                                .foregroundColor(.white)
-                            Text("KM/H")
-                                .font(.bold(.system(size: 20))())
-                                .foregroundColor(accentColor)
-                        }
+                    // شريط البحث
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundColor(.gray)
+                        TextField("بحث...", text: $searchText, onCommit: openSearch)
+                            .foregroundColor(.white)
                     }
-                    .frame(width: 280, height: 280)
+                    .padding()
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
                     
-                    ColorPicker("لون العداد", selection: $accentColor)
-                        .labelsHidden()
-                        .padding(.top)
+                    // زر يوتيوب
+                    Button(action: { openLink("https://m.youtube.com") }) {
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.red)
+                            .shadow(color: .red.opacity(0.4), radius: 10)
+                    }
                 }
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 25)
             }
-            .padding(40)
         }
-        .fullScreenCover(isPresented: $showBrowser) {
-            SafariView(url: browserURL)
+        .fullScreenCover(isPresented: $showBrowser) { SafariView(url: browserURL) }
+        .onReceive(timer) { _ in
+            if speed < 141 { speed += 1.0 }
         }
     }
 
     func openSearch() {
         let query = searchText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        browserURL = URL(string: "https://www.google.com/search?q=\(query)")!
+        openLink("https://www.google.com/search?q=\(query)")
+    }
+    
+    func openLink(_ urlStr: String) {
+        browserURL = URL(string: urlStr)!
         showBrowser = true
+    }
+}
+
+// --- مكونات التصميم المعدلة لتدعم تغيير الألوان ---
+
+struct GaugeBackground: View {
+    var color: Color
+    var body: some View {
+        ZStack {
+            // الحلقة المتوهجة
+            Circle()
+                .trim(from: 0, to: 0.75)
+                .stroke(color.opacity(0.8), style: StrokeStyle(lineWidth: 15, lineCap: .round))
+                .rotationEffect(.degrees(135))
+                .shadow(color: color.opacity(0.6), radius: 15)
+            
+            // الخطوط (Ticks)
+            ForEach(0..<23) { tick in
+                Rectangle()
+                    .fill(tick % 2 == 0 ? color : Color.white.opacity(0.3))
+                    .frame(width: tick % 2 == 0 ? 3 : 1, height: 10)
+                    .offset(y: -135)
+                    .rotationEffect(.degrees(Double(tick) * 12 + 135))
+            }
+            
+            // الأرقام
+            ForEach([0, 40, 80, 120, 160, 200, 240], id: \.self) { num in
+                Text("\(num)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(color)
+                    .position(numTextPosition(for: num, radius: 105))
+            }
+        }
+    }
+    
+    func numTextPosition(for num: Int, radius: CGFloat) -> CGPoint {
+        let angle = CGFloat(num) / 240.0 * 270.0 + 135.0
+        let radian = angle * CGFloat.pi / 180.0
+        let x = radius * cos(radian) + 150 
+        let y = radius * sin(radian) + 150
+        return CGPoint(x: x, y: y)
+    }
+}
+
+struct GaugeNeedle: View {
+    var speed: Double
+    var color: Color
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(LinearGradient(colors: [.white, color], startPoint: .top, endPoint: .bottom))
+                .frame(width: 3, height: 120)
+                .offset(y: -50)
+            
+            Circle()
+                .fill(color)
+                .frame(width: 15, height: 15)
+                .shadow(color: color, radius: 5)
+        }
+        .rotationEffect(.degrees(Double(speed) / 240.0 * 270.0 + 135.0))
+    }
+}
+
+struct DigitalDashboard: View {
+    var speed: Double
+    var color: Color
+    var body: some View {
+        VStack(spacing: -5) {
+            Text("\(Int(speed))")
+                .font(.system(size: 70, weight: .black, design: .monospaced))
+                .foregroundColor(.white)
+                .shadow(color: color.opacity(0.5), radius: 10)
+            Text("KM/H")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(color)
+                .tracking(3)
+        }
+        .padding(.top, 130)
     }
 }
 
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        return SFSafariViewController(url: url)
-    }
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+    func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
+    func updateUIViewController(_ ui: SFSafariViewController, context: Context) {}
 }
